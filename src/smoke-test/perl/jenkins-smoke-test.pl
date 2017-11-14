@@ -8,10 +8,12 @@ package main;
 use FindBin qw($Bin);
 use lib "$Bin/lib";
 use Getopt::Long qw(:config gnu_getopt no_ignore_case auto_version auto_help);
-use Helpers qw(:log :shell throw_if_empty random_string);
+use Helpers qw(:log :shell throw_if_empty random_string process_file);
 use SSHClient;
 use JenkinsCli;
 use File::Spec;
+use File::Basename;
+use File::Find;
 
 use Data::Dumper;
 
@@ -39,22 +41,34 @@ GetOptions(\%options,
     'adminUser=s',
     'publicKeyFile=s',
     'privateKeyFile=s',
+    'k8sName=s',
+    'acrName=s',
     'clean!',
     'verbose!',
 );
 
-print Dumper(\%options);
+{
+    my $secret = delete $options{clientSecret};
+    print Data::Dumper->Dump([\%options], ["options"]);
+    $options{clientSecret} = $secret;
+}
 
 our $verbose = $options{verbose};
 
 check_tool('Azure CLI', 'which az');
+check_tool('Docker', 'which docker && docker ps');
+
 throw_if_empty('Azure subscription ID', $options{subscriptionId});
 throw_if_empty('Azure client ID', $options{clientId});
 throw_if_empty('Azure client secret', $options{clientSecret});
 throw_if_empty('Azure tenant ID', $options{tenantId});
 throw_if_empty('VM admin user', $options{adminUser});
+
 -e $options{publicKeyFile} or die "SSH public key file $options{publicKeyFile} does not exist.";
 -e $options{privateKeyFile} or die "SSH private key file $options{privateKeyFile} does not exist.";
+
+$options{publicKey} = Helpers::read_file($options{publicKeyFile}, 1);
+$options{privateKey} = Helpers::read_file($options{privateKeyFile}, 1);
 
 {
     local $main::verbose = 0;
@@ -71,72 +85,48 @@ if (!$options{'resource-group'}) {
     $options{'location'} ||= 'Southeast Asia';
 
     checked_run(qw(az group create -n), $options{'resource-group'}, '-l', $options{location});
+} else {
+    $options{'location'} = checked_output(qw(az group show --query location --output tsv -n), $options{'resource-group'});
 }
 
-# provision Jenkins
-if (!$options{vmName}) {
-    $options{vmName} = 'smoke-vm-' . random_string();
-    checked_run(qw(az vm create -n), $options{vmName}, '-g', $options{'resource-group'}, '--image', 'UbuntuLTS', '--size',
-        'Standard_DS2_v2', '--admin-username', $options{adminUser}, '--ssh-key-value', $options{publicKeyFile});
+if (!$options{k8sName}) {
+    $options{k8sDns} = Helpers::random_string(10);
+    $options{k8sName} = 'containerserivce-' . $options{k8sDns};
+    process_file("$Bin/../conf/acs.parameters.json", "$Bin/../target/conf", \%options);
+    checked_run(qw(az group deployment create --template-uri https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/101-acs-kubernetes/azuredeploy.json),
+        '--resource-group', $options{'resource-group'}, '--parameters', '@' . "$Bin/../target/conf/acs.parameters.json");
+#    checked_run(qw(az acs create --orchestrator-type kubernetes --agent-count 1 --resource-group), $options{'resource-group'}, '--name', $options{k8sName}, '--ssh-key-value', $options{publicKeyFile});
+} else {
+    $options{k8sDns} = $options{k8sName};
 }
 
-my $vmAddress = checked_output(qw(az vm show -d --query publicIps --output tsv --resource-group), $options{'resource-group'}, '--name', $options{vmName});
-
-my $ssh = SSHClient->new($vmAddress, 22, $options{adminUser}, $options{privateKeyFile});
-
-$ssh->run(<<'EOF');
-# install jenkins
-sudo apt-get update
-
-wget -q -O - https://pkg.jenkins.io/debian/jenkins-ci.org.key | sudo apt-key add -
-echo deb https://pkg.jenkins.io/debian-stable binary/ | sudo tee /etc/apt/sources.list.d/jenkins.list
-
-sudo apt-get update
-sudo apt-get install -y jenkins openjdk-8-jdk
-EOF
-
-my $jenkins_password = $ssh->output('sudo cat /var/lib/jenkins/secrets/initialAdminPassword');
-my $jenkins = JenkinsCli->new(url => qq{http://$vmAddress:8080/}, password => $jenkins_password);
-my @plugins = qw(
-    cloudbees-folder
-    antisamy-markup-formatter
-    build-timeout
-    credentials-binding
-    timestamper
-    ws-cleanup
-    ant
-    gradle
-    workflow-aggregator
-    github-branch-source
-    pipeline-github-lib
-    pipeline-stage-view
-    git
-    subversion
-    ssh-slaves
-    matrix-auth
-    pam-auth
-    ldap
-    email-ext
-    mailer
-    azure-commons
-    azure-credentials
-    kubernetes-cd
-    azure-acs
-    windows-azure-storage
-    azure-container-agents
-    azure-vm-agents
-    azure-app-service
-    azure-function
-);
-for my $plugin (@plugins) {
-    $jenkins->install_plugin($plugin, deploy => 1);
+if (!$options{acrName}) {
+    $options{acrName} = 'acr' . Helpers::random_string();
+    checked_run(qw(az acr create --sku Basic --admin-enabled true --resource-group), $options{'resource-group'}, '--name', $options{acrName});
 }
 
-$ssh->copy_to("$Bin/../groovy/init.groovy", "init.groovy");
-$ssh->run(<<'EOF');
-sudo mv init.groovy /var/lib/jenkins/
-sudo service jenkins restart
-EOF
+$options{acrHost} = checked_output(qw(az acr show --query "loginServer" --output tsv --resource-group), $options{'resource-group'}, '--name', $options{acrName});
+$options{acrPassword} = checked_output(qw(az acr credential show --query "passwords[0].value" --output tsv --name), $options{acrName});
+
+find(sub {
+    if (-d $_) {
+        return;
+    }
+    my $rel = File::Spec->abs2rel($File::Find::name, "$Bin/..");
+    my $target_dir = File::Spec->catfile("$Bin/../target", dirname($rel));
+    process_file($File::Find::name, $target_dir, \%options);
+}, "$Bin/..");
+chdir "$Bin/../target";
+
+checked_run(qw(docker build -t smoke .));
+
+my $pid = fork();
+if (!$pid) {
+    checked_run(qw(docker run -it -p8090:8080 smoke));
+    exit 0;
+}
+
+waitpid $pid, 0;
 
 sub END {
     return if not $options{clean};

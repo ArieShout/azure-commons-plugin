@@ -20,8 +20,7 @@
     <submoduleCfg class="list"/>
     <extensions/>
   </scm>
-  <assignedNode></assignedNode>
-  <canRoam>false</canRoam>
+  <canRoam>true</canRoam>
   <disabled>false</disabled>
   <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
   <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
@@ -31,8 +30,8 @@
     <com.microsoft.jenkins.acs.ACSDeploymentBuilder plugin="azure-acs@0.1.4">
       <context>
         <azureCredentialsId>sp</azureCredentialsId>
-        <resourceGroupName>chenyl_k8s</resourceGroupName>
-        <containerService>chenyl_k8s | Kubernetes</containerService>
+        <resourceGroupName>$$resource-group$$</resourceGroupName>
+        <containerService>$$k8sName$$ | Kubernetes</containerService>
         <sshCredentialsId>ssh-credential</sshCredentialsId>
         <configFilePaths>src/main/kubernetes/nginx.yml</configFilePaths>
         <enableConfigSubstitution>false</enableConfigSubstitution>

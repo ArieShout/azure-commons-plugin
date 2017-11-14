@@ -25,37 +25,33 @@ class Helper {
 }
 
 class Config {
-    static String location = 'Southeast Asia'
+    static String location = '$$location$$'
+    static String resourceGroup = '$$resource-group$$'
     static Map<String, String> vmCredential = [
             id: 'vm-credential',
-            username: 'jenkinssmoke',
+            username: '$$adminUser$$',
             password: 'A*1' + Helper.randomString(16)
     ]
     static Map<String, String> sshCredential = [
             id: 'ssh-credential',
-            username: 'azureuser',
-            privateKey: '/opt/jenkins/.ssh/id_rsa',
-            publicKey: '/opt/jenkins/.ssh/id_rsa.pub'
+            username: '$$adminUser$$',
+            privateKey: '/opt/ssh/id_rsa',
+            publicKey: '/opt/ssh/id_rsa.pub'
     ]
-    static String configPath = "/opt/jenkins/config.json"
 
     static Map<String, String> servicePrincipal = [
             id: 'sp',
-            subscriptionId: '',
-            clientId: '',
-            clientSecret: '',
-            tenant: ''
+            subscriptionId: '$$subscriptionId$$',
+            clientId: '$$clientId$$',
+            clientSecret: '$$clientSecret$$',
+            tenant: '$$tenantId$$'
     ]
 
-    static {
-        def jsonSlurper = new JsonSlurper()
-        def cfg = jsonSlurper.parseText(new File(configPath).text)
-
-        servicePrincipal.subscriptionId = cfg.subscriptionId
-        servicePrincipal.clientId = cfg.clientId
-        servicePrincipal.clientSecret = cfg.clientSecret
-        servicePrincipal.tenant = cfg.tenant
-    }
+    static Map<String, String> acrCredential = [
+            id: 'acr',
+            username: '$$acrName$$',
+            password: '$$acrPassword$$'
+    ]
 }
 
 static void setupSecurity() {
@@ -72,6 +68,17 @@ static void addVmCredential() {
             "VM Credential",
             Config.vmCredential.username,
             Config.vmCredential.password
+    )
+    SystemCredentialsProvider.instance.store.addCredentials(Domain.global(), credential)
+}
+
+static void addAcrCredential() {
+    def credential = new UsernamePasswordCredentialsImpl(
+            CredentialsScope.GLOBAL,
+            Config.acrCredential.id,
+            'ACR Credential',
+            Config.acrCredential.username,
+            Config.acrCredential.password
     )
     SystemCredentialsProvider.instance.store.addCredentials(Domain.global(), credential)
 }
@@ -151,7 +158,7 @@ static void setupVmCloud(String azureCredentialId) {
             "3",
             "1200",
             "new",
-            "jenkins-smoke-" + Helper.randomString(),
+            Config.resourceGroup,
             "",
             [template]
     )
@@ -164,6 +171,7 @@ static void setupVmCloud(String azureCredentialId) {
 setupSecurity()
 addVmCredential()
 addSshCredential()
+addAcrCredential()
 addAzureCredential()
 setupVmCloud(Config.servicePrincipal.id)
 

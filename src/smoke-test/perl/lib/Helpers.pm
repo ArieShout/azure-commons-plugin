@@ -6,12 +6,16 @@ use warnings;
 use IPC::Open3 qw(open3);
 use Symbol;
 use base qw(Exporter);
+use File::Basename;
+use File::Path qw(make_path);
+use File::Spec;
 
 our @EXPORT = qw(get_env throw_if_empty random_string);
 our @EXPORT_OK = qw(
     retry_until_successful
     quote_cmd_arg list2cmdline check_tool run_shell checked_run checked_run_quiet checked_output
     log_info log_warning log_error print_banner
+    read_file process_file
 );
 our %EXPORT_TAGS = (
     log => [qw(log_info log_warning log_error print_banner)],
@@ -138,6 +142,51 @@ sub print_banner {
     log_info '********************************************************************************';
     log_info "* ${msg}";
     log_info '********************************************************************************';
+}
+
+sub read_file {
+    my ($file, $strip) = @_;
+    local $/;
+    open my $fh, '<', $file or die "Cannot read file $file: $!\n";
+    my $data = <$fh>;
+    if ($strip) {
+        $data =~ s/^\s+//g;
+        $data =~ s/\s+$//g;
+    }
+    $data;
+}
+
+sub process_file {
+    my ($source, $target_dir, $options) = @_;
+
+    make_path($target_dir);
+    my $target_file = File::Spec->catfile($target_dir, basename($source));
+    
+    my ($source_inode, $source_mode) = (stat $source)[1, 2];
+
+    if (-e $target_file) {
+        my ($target_inode) = (stat $target_file)[1];
+        if ($source_inode && $source_inode == $target_inode) {
+            # for simplicity and easier clean
+            die "Cannot process and write to the same file $source\n";
+        }
+    }
+
+    log_info("Process $source ===> $target_file ...");
+
+    open my $in, '<', $source or die "Cannot read file $source: $!\n";
+    open my $out, '>', $target_file or die "Cannot write file $target_file: $!\n";
+
+    while (<$in>) {
+        s{\$\$([^\$]+?)\$\$}{
+            exists ${$options}{$1} ? $options->{$1} : (die "Replacement $1 not found in $source")
+        }ge;
+        print $out $_;
+    }
+    close $in;
+    close $out;
+
+    chmod $source_mode, $target_file;
 }
 
 1;
