@@ -132,6 +132,12 @@ for my $plugin (@plugins) {
     $jenkins->install_plugin($plugin, deploy => 1);
 }
 
+$ssh->copy_to("$Bin/../groovy/init.groovy", "init.groovy");
+$ssh->run(<<'EOF');
+sudo mv init.groovy /var/lib/jenkins/
+sudo service jenkins restart
+EOF
+
 sub END {
     return if not $options{clean};
 

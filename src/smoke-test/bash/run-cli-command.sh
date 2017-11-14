@@ -69,14 +69,16 @@ if [ ! -e jenkins-cli.jar ]; then
     retry_until_successful wget "${jenkins_url}jnlpJars/jenkins-cli.jar" -O jenkins-cli.jar
 fi
 
-if [ -z "$jenkins_password" ]; then
+#if [ -z "$jenkins_password" ]; then
     # NOTE: Intentionally setting this after the first retry_until_successful to ensure the initialAdminPassword file exists
-    jenkins_password=`sudo cat /var/lib/jenkins/secrets/initialAdminPassword`
-fi
+    #jenkins_password=`sudo cat /var/lib/jenkins/secrets/initialAdminPassword`
+#fi
 
 log_info "Running \"${command}\"..."
 if [ -z "$command_input_file" ]; then
-    retry_until_successful java -jar jenkins-cli.jar -s "${jenkins_url}" -auth "${jenkins_username}":"${jenkins_password}" $command
+    #retry_until_successful java -jar jenkins-cli.jar -s "${jenkins_url}" -auth "${jenkins_username}":"${jenkins_password}" $command
+    retry_until_successful java -jar jenkins-cli.jar -s "${jenkins_url}" $command
 else
-    retry_until_successful cat "$command_input_file" | java -jar jenkins-cli.jar -s "${jenkins_url}" -auth "${jenkins_username}":"${jenkins_password}" $command
+    #retry_until_successful cat "$command_input_file" | java -jar jenkins-cli.jar -s "${jenkins_url}" -auth "${jenkins_username}":"${jenkins_password}" $command
+    retry_until_successful cat "$command_input_file" | java -jar jenkins-cli.jar -s "${jenkins_url}" $command
 fi

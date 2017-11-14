@@ -1,5 +1,4 @@
-#FROM jenkins/jenkins:lts
-FROM smoke-base
+FROM jenkins/jenkins:lts
 
 #RUN wget -q -O - https://pkg.jenkins.io/debian/jenkins-ci.org.key | apt-key add - && \
 #    echo deb https://pkg.jenkins.io/debian-stable binary/ | tee /etc/apt/sources.list.d/jenkins.list && \
@@ -11,13 +10,7 @@ FROM smoke-base
 #    apt-get install apt-transport-https && \
 #    apt-get update && apt-get install -y azure-cli
 
-#RUN /opt/bash/bootstrap-jenkins.sh
+COPY bash/bootstrap-jenkins.sh /opt/bash/bootstrap-jenkins.sh
 
-WORKDIR /var/jenkins_home
-
-COPY . /opt
-
-ENV JAVA_OPTS -Djenkins.install.runSetupWizard=false
-
-COPY groovy/init.groovy /usr/share/jenkins/ref/
+RUN /opt/bash/bootstrap-jenkins.sh
 

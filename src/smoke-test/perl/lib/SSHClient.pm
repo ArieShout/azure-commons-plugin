@@ -26,13 +26,27 @@ sub new {
 sub run {
     my $self = shift;
 
-    checked_run($self->base_command, @_);
+    checked_run($self->base_ssh_command, @_);
 }
 
 sub output {
     my $self = shift;
 
-    checked_output($self->base_command, @_);
+    checked_output($self->base_ssh_command, @_);
+}
+
+sub copy_to {
+    my $self = shift;
+    my ($local, $remote) = @_;
+
+    checked_run($self->base_scp_command, $local, $self->login_host . ':' . $remote);
+}
+
+sub copy_from {
+    my $self = shift;
+    my ($remote, $local) = @_;
+
+    checked_run($self->base_scp_command, $self->login_host . ':' . $remote, $local);
 }
 
 sub login_host {
@@ -41,9 +55,14 @@ sub login_host {
     $self->{user} . '@' . $self->{host};
 }
 
-sub base_command {
+sub base_ssh_command {
     my $self = shift;
     'ssh', '-p', $self->{port}, '-i', $self->{key}, '-o', 'StrictHostKeyChecking=no', $self->login_host, '--';
+}
+
+sub base_scp_command {
+    my $self = shift;
+    'scp', '-P', $self->{port}, '-i', $self->{key}, '-o', 'StrictHostKeyChecking=no';
 }
 
 1;

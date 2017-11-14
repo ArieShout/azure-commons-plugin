@@ -29,7 +29,7 @@ class Config {
     static Map<String, String> vmCredential = [
             id: 'vm-credential',
             username: 'jenkinssmoke',
-            password: Helper.randomString(16)
+            password: 'A*1' + Helper.randomString(16)
     ]
     static Map<String, String> sshCredential = [
             id: 'ssh-credential',
@@ -61,9 +61,7 @@ class Config {
 static void setupSecurity() {
     Jenkins instance = Jenkins.instance
     def strategy = AuthorizationStrategy.UNSECURED
-    def realm = new HudsonPrivateSecurityRealm(false, false, null)
     instance.authorizationStrategy = strategy
-    instance.securityRealm = realm
     instance.save()
 }
 
@@ -168,3 +166,10 @@ addVmCredential()
 addSshCredential()
 addAzureCredential()
 setupVmCloud(Config.servicePrincipal.id)
+
+Thread.start {
+    sleep 10000
+    println '--> setting up jobs'
+    def process = 'bash /opt/bash/setup-jobs.sh'.execute()
+    process.waitForProcessOutput(System.out, System.err)
+}
