@@ -20,5 +20,7 @@ for f in $SCRIPT_DIR/../jobs/*.xml; do
     name=$(basename "$f")
     name="${name%.*}"
     "$SCRIPT_DIR/run-cli-command.sh" -c "create-job $name" <"$f"
+    "$SCRIPT_DIR/run-cli-command.sh" -c "build $name"
 done
+
 

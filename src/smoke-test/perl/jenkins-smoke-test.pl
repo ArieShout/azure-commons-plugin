@@ -14,6 +14,7 @@ use JenkinsCli;
 use File::Spec;
 use File::Basename;
 use File::Find;
+use File::Path qw(make_path);
 
 use Data::Dumper;
 
@@ -105,8 +106,8 @@ if (!$options{acrName}) {
     checked_run(qw(az acr create --sku Basic --admin-enabled true --resource-group), $options{'resource-group'}, '--name', $options{acrName});
 }
 
-$options{acrHost} = checked_output(qw(az acr show --query "loginServer" --output tsv --resource-group), $options{'resource-group'}, '--name', $options{acrName});
-$options{acrPassword} = checked_output(qw(az acr credential show --query "passwords[0].value" --output tsv --name), $options{acrName});
+$options{acrHost} = checked_output(qw(az acr show --query loginServer --output tsv --resource-group), $options{'resource-group'}, '--name', $options{acrName});
+$options{acrPassword} = checked_output(qw(az acr credential show --query passwords[0].value --output tsv --name), $options{acrName});
 
 find(sub {
     if (-d $_) {
@@ -118,12 +119,58 @@ find(sub {
 }, "$Bin/..");
 chdir "$Bin/../target";
 
-checked_run(qw(docker build -t smoke .));
+$options{jenkinsImage} = 'smoke-' . Helpers::random_string();
+$options{dockerProcessName} = 'smoke-' . Helpers::random_string();
+
+checked_run(qw(docker build -t), $options{jenkinsImage}, '.');
+
+my $jenkins_home = "$Bin/../target/jenkins_home";
+make_path($jenkins_home);
+chmod 0777, $jenkins_home;
 
 my $pid = fork();
 if (!$pid) {
-    checked_run(qw(docker run -it -p8090:8080 smoke));
+    checked_run(qw(docker run -it -p8090:8080 -v), "$jenkins_home:/var/jenkins_home", '--name', $options{dockerProcessName}, $options{jenkinsImage});
     exit 0;
+}
+
+# TODO
+my @jobs = qw(acs-k8s);
+
+sub read_link {
+    my ($file) = @_;
+    if (-l $file) {
+        return readlink($file) || -1;
+    } else {
+        return -1;
+    }
+}
+
+while (1) {
+    print_banner("Check Build Status");
+    for my $job (@jobs) {
+        my $job_home = File::Spec->catfile($jenkins_home, 'jobs', $job);
+        if (not -e $job_home) {
+            print "$job - missing\n";
+            next;
+        }
+        my $builds_home = File::Spec->catfile($job_home, 'builds');
+        if (not -e $builds_home) {
+            print "$job - no build\n";
+            next;
+        }
+        my $lastSuccessfulBuild = read_link(File::Spec->catfile($builds_home, 'lastSuccessfulBuild'));
+        my $lastUnsuccessfulBuild = read_link(File::Spec->catfile($builds_home, 'lastUnsuccessfulBuild'));
+        if ($lastUnsuccessfulBuild > 0) {
+            print "$job - failed\n";
+        } elsif ($lastSuccessfulBuild > 0) {
+            print "$job - successful\n";
+        } else {
+            print "$job - unknown\n";
+        }
+    }
+
+    sleep 20;
 }
 
 waitpid $pid, 0;
