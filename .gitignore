@@ -31,3 +31,5 @@ nbactions*.xml
 .classpath
 .project
 .settings
+
+**/.vstags
