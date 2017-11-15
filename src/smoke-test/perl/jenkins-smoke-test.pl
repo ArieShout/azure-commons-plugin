@@ -51,11 +51,11 @@ GetOptions(\%options,
 );
 
 if (not exists $options{targetDir}) {
-    $options{targetDir} = abs_path("$Bin/../.target-" . Helpers::random_string());
+    $options{targetDir} = File::Spec->catfile(abs_path("$Bin/.."), ".target-" . Helpers::random_string());
 }
 
 if (not exists $options{artifactsDir}) {
-    $options{artifactsDir} = abs_path("$Bin/../.artifacts");
+    $options{artifactsDir} = File::Spec->catfile(abs_path("$Bin/.."), ".artifacts");
 }
 
 {
@@ -77,8 +77,9 @@ throw_if_empty('Azure client secret', $options{clientSecret});
 throw_if_empty('Azure tenant ID', $options{tenantId});
 throw_if_empty('VM admin user', $options{adminUser});
 
+my $generated_key = 0;
 if (not exists $options{publicKeyFile} or not exists $options{privateKeyFile}) {
-    $options{privateKeyFile} = abs_path("$Bin/../.ssh/id_rsa");
+    $options{privateKeyFile} = File::Spec->catfile(abs_path("$Bin/.."), ".ssh/id_rsa");
     $options{publicKeyFile} = $options{privateKeyFile} . '.pub';
     log_info("Generate SSH key at $options{privateKeyFile}");
     make_path(dirname($options{publicKeyFile}));
@@ -86,6 +87,10 @@ if (not exists $options{publicKeyFile} or not exists $options{privateKeyFile}) {
     $command = 'yes | ' . $command;
     log_info($command);
     system('/bin/bash', '-c', $command);
+    if ($? != 0) {
+        die "Failed to generate SSH key pairs";
+    }
+    $generated_key = 1;
 }
 
 -e $options{publicKeyFile} or die "SSH public key file $options{publicKeyFile} does not exist.";
@@ -93,6 +98,12 @@ if (not exists $options{publicKeyFile} or not exists $options{privateKeyFile}) {
 
 $options{publicKey} = Helpers::read_file($options{publicKeyFile}, 1);
 $options{privateKey} = Helpers::read_file($options{privateKeyFile}, 1);
+if ($generated_key) {
+    log_info("Generated SSH private key:");
+    print $options{privateKey}, "\n";
+    log_info("Generated SSH public key:");
+    print $options{publicKey}, "\n";
+}
 
 log_info("Remove all contents in $options{targetDir}");
 remove_tree($options{targetDir});
