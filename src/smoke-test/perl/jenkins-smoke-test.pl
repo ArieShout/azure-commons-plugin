@@ -172,6 +172,10 @@ make_path($options{artifactsDir});
 make_path($jenkins_home);
 chmod 0777, $jenkins_home;
 
+# TODO Change to IPC::Open3
+# we do not have pseudo TTY when running in Jenkins
+# We cannot run with "docker -t" in Jenkins, as a result, the STDOUT of the main process will be buffered
+# and output when the child process termiates, rather than interleaved.
 my $jenkins_pid = fork();
 if (!$jenkins_pid) {
     my @commands = (qw(docker run -i -p8090:8080 -v), "$jenkins_home:/var/jenkins_home", '--name', $options{dockerProcessName}, $options{jenkinsImage});
