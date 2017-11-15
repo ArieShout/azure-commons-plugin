@@ -29,8 +29,6 @@ our %options = (
     clientSecret => $ENV{AZURE_CLIENT_SECRET},
     tenantId => $ENV{AZURE_TENANT_ID},
     adminUser => 'azureuser',
-    publicKeyFile => File::Spec->catfile($ENV{HOME}, '.ssh', 'id_rsa.pub'),
-    privateKeyFile => File::Spec->catfile($ENV{HOME}, '.ssh', 'id_rsa')
 );
 
 GetOptions(\%options,
@@ -71,12 +69,24 @@ our $verbose = $options{verbose};
 
 check_tool('Azure CLI', 'which az');
 check_tool('Docker', 'which docker && docker ps');
+check_tool('ssh-keygen', 'which ssh-keygen');
 
 throw_if_empty('Azure subscription ID', $options{subscriptionId});
 throw_if_empty('Azure client ID', $options{clientId});
 throw_if_empty('Azure client secret', $options{clientSecret});
 throw_if_empty('Azure tenant ID', $options{tenantId});
 throw_if_empty('VM admin user', $options{adminUser});
+
+if (not exists $options{publicKeyFile} or not exists $options{privateKeyFile}) {
+    $options{privateKeyFile} = abs_path("$Bin/../.ssh/id_rsa");
+    $options{publicKeyFile} = $options{privateKeyFile} . '.pub';
+    log_info("Generate SSH key at $options{privateKeyFile}");
+    make_path(dirname($options{publicKeyFile}));
+    my $command = list2cmdline(qw(ssh-keygen -q -t rsa -N), '', '-f', $options{privateKeyFile});
+    $command = 'yes | ' . $command;
+    log_info($command);
+    system('/bin/bash', '-c', $command);
+}
 
 -e $options{publicKeyFile} or die "SSH public key file $options{publicKeyFile} does not exist.";
 -e $options{privateKeyFile} or die "SSH private key file $options{privateKeyFile} does not exist.";
