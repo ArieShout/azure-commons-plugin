@@ -118,7 +118,10 @@ sub list2cmdline {
 
 sub log_with_color {
     my ($color, $msg) = @_;
-    print "${color}${msg}\033[0m\n";
+    # In some multi-process case, the \n does not return to the head of the next line,
+    # but just go to the same cursor position of the next line.
+    # Add \r to force the return behavior
+    print "${color}${msg}\033[0m\r\n";
 }
 
 sub log_info {
