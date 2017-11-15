@@ -113,37 +113,6 @@ sub run {
     }
 }
 
-sub add_cloud {
-    my $self = shift;
-    my ($cloud_file) = @_;
-
-    if (not -w $jenkins_config) {
-        die "Cannot write to Jenkins config file: $jenkins_config\n";
-    }
-
-    open my $cloud_fh, '<', $cloud_file or die "Cannot read file $cloud_file: $!";
-    my $cloud = do { local $/; <$cloud_fh>; };
-    close $cloud_fh;
-
-    my $config_fh;
-    open $config_fh, '<', $jenkins_config or die "Cannot read file $jenkins_config: $!";
-    my @lines = <$config_fh>;
-    my @updated;
-    for my $line (@lines) {
-        if ($line =~ qr{<clouds/?>}) {
-            if (index($line, '/') >= 0) {
-                push @updated, "  <clouds>\n", $cloud, "  </clouds>\n";
-            } else {
-                push @updated, $line, $cloud;
-            }
-        }
-    }
-    close $config_fh;
-    open $config_fh, '>', $jenkins_config or die "Cannot write file $jenkins_config: $!";
-    print $config_fh join('', @updated);
-    close $config_fh;
-}
-
 sub install_plugin {
     my $self = shift;
     my $plugin = shift;
