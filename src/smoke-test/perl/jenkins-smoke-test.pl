@@ -174,7 +174,7 @@ chmod 0777, $jenkins_home;
 
 my $jenkins_pid = fork();
 if (!$jenkins_pid) {
-    my @commands = (qw(docker run -it -p8090:8080 -v), "$jenkins_home:/var/jenkins_home", '--name', $options{dockerProcessName}, $options{jenkinsImage});
+    my @commands = (qw(docker run -i -p8090:8080 -v), "$jenkins_home:/var/jenkins_home", '--name', $options{dockerProcessName}, $options{jenkinsImage});
     my $command = list2cmdline(@commands);
     print_banner("Start Jenkins in Docker");
     log_info($command);
